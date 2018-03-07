@@ -8,6 +8,8 @@ from __future__ import division
 from __future__ import print_function
 
 import multiprocessing
+import os
+import signal
 import sys
 import threading
 import time
@@ -21,13 +23,16 @@ from future.builtins import range  # pylint: disable=redefined-builtin
 from pysc2 import run_configs
 from pysc2.lib import features
 from pysc2.lib import point
+from pysc2.lib import protocol
+from pysc2.lib import remote_controller
 
 from absl import app
 from absl import flags
 from pysc2.lib import gfile
+from s2clientprotocol import common_pb2 as sc_common
 from s2clientprotocol import sc2api_pb2 as sc_pb
 
-from pysc2.bin.replay_actions import ReplayProcessor, ProcessStats, replay_queue_filler
+from pysc2.bin.replay_actions import ReplayProcessor, ProcessStats, replay_queue_filler, valid_replay
 
 from mappings import REAL_UNITS_IDS
 
@@ -53,7 +58,67 @@ RACES = {
 
 
 class TempestReplayProcessor(ReplayProcessor):
-    def process_replay(self, controller, replay_data, map_data, player_id):
+    def run(self):
+        signal.signal(signal.SIGTERM, lambda a, b: sys.exit())  # Exit quietly.
+        self._update_stage("spawn")
+        replay_name = "none"
+        while True:
+            self._print("Starting up a new SC2 instance.")
+            self._update_stage("launch")
+            try:
+                with self.run_config.start() as controller:
+                    self._print("SC2 Started successfully.")
+                    ping = controller.ping()
+                    for _ in range(300):
+                        try:
+                            replay_path = self.replay_queue.get()
+                        except queue.Empty:
+                            self._update_stage("done")
+                            self._print("Empty queue, returning")
+                            return
+                        try:
+                            replay_name = os.path.basename(replay_path)[:10]
+                            self.stats.replay = replay_name
+                            self._print("Got replay: %s" % replay_path)
+                            self._update_stage("open replay file")
+                            replay_data = self.run_config.replay_data(replay_path)
+                            self._update_stage("replay_info")
+                            info = controller.replay_info(replay_data)
+                            self._print((" Replay Info %s " % replay_name).center(60, "-"))
+                            self._print(info)
+                            self._print("-" * 60)
+                            if valid_replay(info, ping):
+                                self.stats.replay_stats.maps[info.map_name] += 1
+                                for player_info in info.player_info:
+                                    race_name = sc_common.Race.Name(
+                                        player_info.player_info.race_actual)
+                                    self.stats.replay_stats.races[race_name] += 1
+                                map_data = None
+                                if info.local_map_path:
+                                    self._update_stage("open map file")
+                                    map_data = self.run_config.map_data(info.local_map_path)
+
+                                # Make directory to store output data
+                                output_dir = "processed/{}".format(replay_name)
+                                if not os.path.exists(output_dir):
+                                    os.makedirs(output_dir)
+
+                                for player_id in [1, 2]:
+                                    self._print("Starting %s from player %s's perspective" % (
+                                        replay_name, player_id))
+                                    self.process_replay(controller, replay_data, map_data, player_id, output_dir, replay_name)
+                            else:
+                                self._print("Replay is invalid.")
+                                self.stats.replay_stats.invalid_replays.add(replay_name)
+                        finally:
+                            self.replay_queue.task_done()
+                    self._update_stage("shutdown")
+            except (protocol.ConnectionError, protocol.ProtocolError, remote_controller.RequestError):
+                self.stats.replay_stats.crashing_replays.add(replay_name)
+            except KeyboardInterrupt:
+                return
+
+    def process_replay(self, controller, replay_data, map_data, player_id, output_dir, replay_name):
         """Process a single replay, updating the stats."""
         self._update_stage("start_replay")
         controller.start_replay(sc_pb.RequestStartReplay(
@@ -123,10 +188,10 @@ class TempestReplayProcessor(ReplayProcessor):
 
             current_timestep += 1
 
-        # TODO: Serialize this data to disk
         np_units = np.array(unit_data)
-        print("Unit Data (shape: {})".format(np_units.shape))
-        print(np_units)
+        fname = output_dir + '/player_{}_units.npy'.format(player_id)
+        np.save(fname, np_units)
+        self._print("Wrote player {} unit data to {}.".format(player_id, fname))
 
 
 def stats_printer(stats_queue):
