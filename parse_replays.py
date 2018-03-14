@@ -137,6 +137,7 @@ class TempestReplayProcessor(ReplayProcessor):
 
         base_data = []
         unit_data = []
+        resource_data = []
 
         while True:
             self.stats.replay_stats.steps += 1
@@ -182,6 +183,12 @@ class TempestReplayProcessor(ReplayProcessor):
                     elif u.unit_type in BASE_IDS:
                         curr_bases.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
 
+            # https://github.com/deepmind/pysc2/blob/master/docs/environment.md#general-player-information
+            res = obs.observation.player_common
+            resource_data.append((
+                current_timestep, res.minerals, res.vespene, res.food_cap, res.food_used, res.food_army,
+                res.food_workers, res.idle_worker_count, res.army_count, res.warp_gate_count, res.larva_count))
+
             for ability_id in feat.available_actions(obs.observation):
                 self.stats.replay_stats.valid_actions[ability_id] += 1
 
@@ -209,6 +216,11 @@ class TempestReplayProcessor(ReplayProcessor):
         fname = output_dir + '/player_{}_bases.npy'.format(player_id)
         np.save(fname, np_bases)
         self._print("Wrote player {} base data to {}.".format(player_id, fname))
+
+        np_resources = np.array(resource_data)
+        fname = output_dir + '/player_{}_resources.npy'.format(player_id)
+        np.save(fname, np_resources)
+        self._print("Wrote player {} resource data to {}.".format(player_id, fname))
 
 
 def stats_printer(stats_queue):
