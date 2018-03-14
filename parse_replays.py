@@ -34,7 +34,7 @@ from s2clientprotocol import sc2api_pb2 as sc_pb
 
 from pysc2.bin.replay_actions import ReplayProcessor, ProcessStats, replay_queue_filler, valid_replay
 
-from mappings import REAL_UNITS_IDS
+from mappings import REAL_UNITS_IDS, BASE_IDS
 
 FLAGS = flags.FLAGS
 
@@ -135,6 +135,7 @@ class TempestReplayProcessor(ReplayProcessor):
 
         current_timestep = 0
 
+        base_data = []
         unit_data = []
 
         while True:
@@ -165,13 +166,21 @@ class TempestReplayProcessor(ReplayProcessor):
                 self.stats.replay_stats.valid_abilities[valid.ability_id] += 1
 
             curr_units = []
+            curr_bases = []
 
             for u in obs.observation.raw_data.units:
                 self.stats.replay_stats.unit_ids[u.unit_type] += 1
 
-                # unit.alliance == 1 indicates that it belongs to the player
-                if u.alliance == 1 and u.unit_type in REAL_UNITS_IDS:
-                    curr_units.append((current_timestep, u.unit_type, u.tag, u.pos.x, u.pos.y))
+                # https://github.com/Blizzard/s2client-api/blob/master/include/sc2api/sc2_unit.h#L83
+                # Alliance::Self == 1
+                # Alliance::Ally == 2
+                # Alliance::Neutral == 3
+                # Alliance::Enemy == 4
+                if u.alliance != 3:
+                    if u.unit_type in REAL_UNITS_IDS:
+                        curr_units.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
+                    elif u.unit_type in BASE_IDS:
+                        curr_bases.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
 
             for ability_id in feat.available_actions(obs.observation):
                 self.stats.replay_stats.valid_actions[ability_id] += 1
@@ -182,9 +191,12 @@ class TempestReplayProcessor(ReplayProcessor):
             self._update_stage("step")
             controller.step(FLAGS.step_mul)
 
-            # Sort units by type, then by their unique ID (tag)
+            # Sort units by alliance, type, then by their unique ID (tag)
             for unit in sorted(curr_units):
                 unit_data.append(unit)
+
+            for base in sorted(curr_bases):
+                base_data.append(base)
 
             current_timestep += 1
 
@@ -192,6 +204,11 @@ class TempestReplayProcessor(ReplayProcessor):
         fname = output_dir + '/player_{}_units.npy'.format(player_id)
         np.save(fname, np_units)
         self._print("Wrote player {} unit data to {}.".format(player_id, fname))
+
+        np_bases = np.array(base_data)
+        fname = output_dir + '/player_{}_bases.npy'.format(player_id)
+        np.save(fname, np_bases)
+        self._print("Wrote player {} base data to {}.".format(player_id, fname))
 
 
 def stats_printer(stats_queue):
