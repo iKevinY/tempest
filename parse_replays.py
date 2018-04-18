@@ -49,14 +49,6 @@ size.assign_to(interface.feature_layer.minimap_resolution)
 logging.getLogger("absl").setLevel(logging.WARNING)
 
 
-# https://github.com/Blizzard/s2client-api/blob/master/include/sc2api/sc2_gametypes.h
-RACES = {
-    1: "Terran",
-    2: "Zerg",
-    3: "Protoss"
-}
-
-
 class TempestReplayProcessor(ReplayProcessor):
     def run(self):
         signal.signal(signal.SIGTERM, lambda a, b: sys.exit())  # Exit quietly.
@@ -168,6 +160,7 @@ class TempestReplayProcessor(ReplayProcessor):
 
             curr_units = []
             curr_bases = []
+            opp_units = []
 
             for u in obs.observation.raw_data.units:
                 self.stats.replay_stats.unit_ids[u.unit_type] += 1
@@ -182,6 +175,9 @@ class TempestReplayProcessor(ReplayProcessor):
                         curr_units.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
                     elif u.unit_type in BASE_IDS:
                         curr_bases.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
+                elif u.alliance == 4:
+                    if u.unit_type in REAL_UNITS_IDS:
+                        opp_units.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
 
             # https://github.com/deepmind/pysc2/blob/master/docs/environment.md#general-player-information
             res = obs.observation.player_common
@@ -221,6 +217,11 @@ class TempestReplayProcessor(ReplayProcessor):
         fname = output_dir + '/player_{}_resources.npy'.format(player_id)
         np.save(fname, np_resources)
         self._print("Wrote player {} resource data to {}.".format(player_id, fname))
+
+        np_opp_units = np.array(opp_units)
+        fname = output_dir + '/player_{}_opp_units.npy'.format(player_id)
+        np.save(fname, np_opp_units)
+        self._print("Wrote player {} opponent unit data to {}.".format(player_id, fname))
 
 
 def stats_printer(stats_queue):
