@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import logging
+import json
 
 import numpy as np
 
@@ -94,6 +95,11 @@ class TempestReplayProcessor(ReplayProcessor):
                                 output_dir = "processed/{}".format(replay_name)
                                 if not os.path.exists(output_dir):
                                     os.makedirs(output_dir)
+
+                                metadata_name = output_dir + '/metadata.txt'
+                                with open(metadata_name, 'w') as f:
+                                    f.write(str(info))
+                                    self._print("Wrote metadata to %s" % metadata_name)
 
                                 for player_id in [1, 2]:
                                     self._print("Starting %s from player %s's perspective" % (
