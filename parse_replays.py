@@ -50,6 +50,14 @@ size.assign_to(interface.feature_layer.minimap_resolution)
 logging.getLogger("absl").setLevel(logging.WARNING)
 
 
+RESULT = {
+    1: 'Win',
+    2: 'Loss',
+    3: 'Tie',
+    4: 'Unknown'
+}
+
+
 class TempestReplayProcessor(ReplayProcessor):
     def run(self):
         signal.signal(signal.SIGTERM, lambda a, b: sys.exit())  # Exit quietly.
@@ -96,9 +104,36 @@ class TempestReplayProcessor(ReplayProcessor):
                                 if not os.path.exists(output_dir):
                                     os.makedirs(output_dir)
 
-                                metadata_name = output_dir + '/metadata.txt'
+                                metadata = {}
+                                metadata['map_name'] = info.map_name
+                                metadata['game_duration_loops'] = info.game_duration_loops
+                                metadata['game_duration_seconds'] = info.game_duration_seconds
+                                metadata['game_version'] = info.game_version
+                                metadata['data_version'] = info.data_version
+                                metadata['players'] = {}
+                                races = []
+                                total_apm = 0
+                                total_mmr = 0
+
+                                for p in info.player_info:
+                                    player = {}
+                                    race = sc_common.Race.Name(p.player_info.race_actual)
+                                    races.append(race[0])
+                                    player['race'] = race
+                                    player['result'] = RESULT[p.player_result.result]
+                                    player['apm'] = p.player_apm
+                                    total_apm += p.player_apm
+                                    player['mmr'] = p.player_mmr
+                                    total_mmr += p.player_mmr
+                                    metadata['players'][p.player_info.player_id] = player
+
+                                metadata['matchup'] = '{}v{}'.format(min(races), max(races))
+                                metadata['game_apm'] = total_apm // len(races)
+                                metadata['game_mmr'] = total_mmr // len(races)
+
+                                metadata_name = output_dir + '/metadata.json'
                                 with open(metadata_name, 'w') as f:
-                                    f.write(str(info))
+                                    f.write(json.dumps(metadata, indent=4, sort_keys=True) + '\n')
                                     self._print("Wrote metadata to %s" % metadata_name)
 
                                 for player_id in [1, 2]:
