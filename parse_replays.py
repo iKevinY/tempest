@@ -39,6 +39,10 @@ from mappings import REAL_UNITS_IDS, BASE_IDS
 
 FLAGS = flags.FLAGS
 
+# Manually adjust the step multiplier to get approximately
+# 1 observation per 10 seconds of actual game time.
+FLAGS.step_mul = 225
+
 size = point.Point(16, 16)
 interface = sc_pb.InterfaceOptions(
     raw=True, score=False,
