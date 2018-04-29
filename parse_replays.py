@@ -89,9 +89,7 @@ class TempestReplayProcessor(ReplayProcessor):
                             replay_data = self.run_config.replay_data(replay_path)
                             self._update_stage("replay_info")
                             info = controller.replay_info(replay_data)
-                            self._print((" Replay Info %s " % replay_name).center(60, "-"))
-                            self._print(info)
-                            self._print("-" * 60)
+                            self._print("Replay %s" % replay_name)
                             if valid_replay(info, ping):
                                 self.stats.replay_stats.maps[info.map_name] += 1
                                 for player_info in info.player_info:
@@ -134,6 +132,9 @@ class TempestReplayProcessor(ReplayProcessor):
                                 metadata['matchup'] = '{}v{}'.format(min(races), max(races))
                                 metadata['game_apm'] = total_apm // len(races)
                                 metadata['game_mmr'] = total_mmr // len(races)
+
+                                self._print("Matchup: {} @ {}".format(metadata['matchup'], metadata['map_name']))
+                                self._print("Average MMR: {}".format(metadata['game_mmr']))
 
                                 metadata_name = output_dir + '/metadata.json'
                                 with open(metadata_name, 'w') as f:
