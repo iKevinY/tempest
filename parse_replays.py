@@ -35,7 +35,7 @@ from s2clientprotocol import sc2api_pb2 as sc_pb
 
 from pysc2.bin.replay_actions import ReplayProcessor, ProcessStats, replay_queue_filler, valid_replay
 
-from mappings import REAL_UNITS_IDS, BASE_IDS
+from mappings import REAL_UNITS_IDS, BASE_IDS, TEMPEST_UNITS, UNIT_ID_TO_NAME
 
 FLAGS = flags.FLAGS
 
@@ -89,7 +89,7 @@ class TempestReplayProcessor(ReplayProcessor):
                             replay_data = self.run_config.replay_data(replay_path)
                             self._update_stage("replay_info")
                             info = controller.replay_info(replay_data)
-                            self._print("Replay %s" % replay_name)
+                            self._print("Processing Replay %s " % replay_name)
                             if valid_replay(info, ping):
                                 self.stats.replay_stats.maps[info.map_name] += 1
                                 for player_info in info.player_info:
@@ -208,6 +208,8 @@ class TempestReplayProcessor(ReplayProcessor):
             curr_bases = []
             opp_units = []
 
+            unit_count = [0 for _ in range(200)]
+
             for u in obs.observation.raw_data.units:
                 self.stats.replay_stats.unit_ids[u.unit_type] += 1
 
@@ -216,11 +218,16 @@ class TempestReplayProcessor(ReplayProcessor):
                 # Alliance::Ally == 2
                 # Alliance::Neutral == 3
                 # Alliance::Enemy == 4
-                if u.alliance != 3:
+                if u.alliance == 1:
                     if u.unit_type in REAL_UNITS_IDS:
                         curr_units.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
                     elif u.unit_type in BASE_IDS:
                         curr_bases.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
+
+                    unit_name = UNIT_ID_TO_NAME[u.unit_type]
+                    tempest_id = TEMPEST_UNITS[name]
+                    unit_count[tempest_id] += 1
+
                 elif u.alliance == 4:
                     if u.unit_type in REAL_UNITS_IDS:
                         opp_units.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
