@@ -35,7 +35,7 @@ from s2clientprotocol import sc2api_pb2 as sc_pb
 
 from pysc2.bin.replay_actions import ReplayProcessor, ProcessStats, replay_queue_filler, valid_replay
 
-from mappings import REAL_UNITS_IDS, BASE_IDS, TEMPEST_UNITS, UNIT_ID_TO_NAME
+from mappings import TEMPEST_UNITS, UNIT_ID_TO_NAME
 
 FLAGS = flags.FLAGS
 
@@ -173,8 +173,8 @@ class TempestReplayProcessor(ReplayProcessor):
 
         current_timestep = 0
 
-        base_data = []
         unit_data = []
+        obs_data = []
         resource_data = []
 
         while True:
@@ -204,11 +204,8 @@ class TempestReplayProcessor(ReplayProcessor):
             for valid in obs.observation.abilities:
                 self.stats.replay_stats.valid_abilities[valid.ability_id] += 1
 
-            curr_units = []
-            curr_bases = []
-            opp_units = []
-
             unit_count = [0 for _ in range(200)]
+            obs_count = [0 for _ in range(200)]
 
             for u in obs.observation.raw_data.units:
                 self.stats.replay_stats.unit_ids[u.unit_type] += 1
@@ -219,18 +216,14 @@ class TempestReplayProcessor(ReplayProcessor):
                 # Alliance::Neutral == 3
                 # Alliance::Enemy == 4
                 if u.alliance == 1:
-                    if u.unit_type in REAL_UNITS_IDS:
-                        curr_units.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
-                    elif u.unit_type in BASE_IDS:
-                        curr_bases.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
-
                     unit_name = UNIT_ID_TO_NAME[u.unit_type]
-                    tempest_id = TEMPEST_UNITS[name]
+                    tempest_id = TEMPEST_UNITS[unit_name]
                     unit_count[tempest_id] += 1
 
                 elif u.alliance == 4:
-                    if u.unit_type in REAL_UNITS_IDS:
-                        opp_units.append((current_timestep, u.alliance, u.unit_type, u.tag, u.pos.x, u.pos.y))
+                    unit_name = UNIT_ID_TO_NAME[u.unit_type]
+                    tempest_id = TEMPEST_UNITS[unit_name]
+                    obs_count[tempest_id] += 1
 
             # https://github.com/deepmind/pysc2/blob/master/docs/environment.md#general-player-information
             res = obs.observation.player_common
@@ -247,12 +240,8 @@ class TempestReplayProcessor(ReplayProcessor):
             self._update_stage("step")
             controller.step(FLAGS.step_mul)
 
-            # Sort units by alliance, type, then by their unique ID (tag)
-            for unit in sorted(curr_units):
-                unit_data.append(unit)
-
-            for base in sorted(curr_bases):
-                base_data.append(base)
+            unit_data.append(unit_count)
+            obs_data.append(obs_count)
 
             current_timestep += 1
 
@@ -261,20 +250,15 @@ class TempestReplayProcessor(ReplayProcessor):
         np.save(fname, np_units)
         self._print("Wrote player {} unit data to {}.".format(player_id, fname))
 
-        np_bases = np.array(base_data)
-        fname = output_dir + '/player_{}_bases.npy'.format(player_id)
-        np.save(fname, np_bases)
-        self._print("Wrote player {} base data to {}.".format(player_id, fname))
+        np_opp_units = np.array(obs_data)
+        fname = output_dir + '/player_{}_observed.npy'.format(player_id)
+        np.save(fname, np_opp_units)
+        self._print("Wrote player {}'s observed data to {}.".format(player_id, fname))
 
         np_resources = np.array(resource_data)
         fname = output_dir + '/player_{}_resources.npy'.format(player_id)
         np.save(fname, np_resources)
         self._print("Wrote player {} resource data to {}.".format(player_id, fname))
-
-        np_opp_units = np.array(opp_units)
-        fname = output_dir + '/player_{}_opp_units.npy'.format(player_id)
-        np.save(fname, np_opp_units)
-        self._print("Wrote player {} opponent unit data to {}.".format(player_id, fname))
 
 
 def stats_printer(stats_queue):
