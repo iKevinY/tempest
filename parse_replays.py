@@ -15,6 +15,7 @@ import threading
 import time
 import logging
 import json
+from collections import defaultdict
 
 import numpy as np
 
@@ -38,10 +39,6 @@ from pysc2.bin.replay_actions import ReplayProcessor, ProcessStats, replay_queue
 from mappings import TEMPEST_UNITS, UNIT_ID_TO_NAME
 
 FLAGS = flags.FLAGS
-
-# Manually adjust the step multiplier to get approximately
-# 1 observation per 10 seconds of actual game time.
-FLAGS.step_mul = 225
 
 size = point.Point(16, 16)
 interface = sc_pb.InterfaceOptions(
@@ -135,6 +132,7 @@ class TempestReplayProcessor(ReplayProcessor):
 
                                 self._print("Matchup: {} @ {}".format(metadata['matchup'], metadata['map_name']))
                                 self._print("Average MMR: {}".format(metadata['game_mmr']))
+                                self._print("Game length: {}s".format(int(metadata['game_duration_seconds'])))
 
                                 metadata_name = output_dir + '/metadata.json'
                                 with open(metadata_name, 'w') as f:
@@ -165,47 +163,25 @@ class TempestReplayProcessor(ReplayProcessor):
             options=interface,
             observed_player_id=player_id))
 
-        feat = features.Features(controller.game_info())
+        # feat = features.Features(controller.game_info())
 
         self.stats.replay_stats.replays += 1
         self._update_stage("step")
         controller.step()
 
-        current_timestep = 0
+        current_timestep = 1
 
         unit_data = []
         obs_data = []
-        resource_data = []
+        state_data = []
+
+        cur_units = defaultdict(set)
+        cur_obs = defaultdict(set)
 
         while True:
             self.stats.replay_stats.steps += 1
             self._update_stage("observe")
             obs = controller.observe()
-
-            for action in obs.actions:
-                act_fl = action.action_feature_layer
-                if act_fl.HasField("unit_command"):
-                    self.stats.replay_stats.made_abilities[act_fl.unit_command.ability_id] += 1
-                if act_fl.HasField("camera_move"):
-                    self.stats.replay_stats.camera_move += 1
-                if act_fl.HasField("unit_selection_point"):
-                    self.stats.replay_stats.select_pt += 1
-                if act_fl.HasField("unit_selection_rect"):
-                    self.stats.replay_stats.select_rect += 1
-                if action.action_ui.HasField("control_group"):
-                    self.stats.replay_stats.control_group += 1
-
-                try:
-                    func = feat.reverse_action(action).function
-                except ValueError:
-                    func = -1
-                self.stats.replay_stats.made_actions[func] += 1
-
-            for valid in obs.observation.abilities:
-                self.stats.replay_stats.valid_abilities[valid.ability_id] += 1
-
-            unit_count = [0 for _ in range(200)]
-            obs_count = [0 for _ in range(200)]
 
             for u in obs.observation.raw_data.units:
                 self.stats.replay_stats.unit_ids[u.unit_type] += 1
@@ -218,47 +194,62 @@ class TempestReplayProcessor(ReplayProcessor):
                 if u.alliance == 1:
                     unit_name = UNIT_ID_TO_NAME[u.unit_type]
                     tempest_id = TEMPEST_UNITS[unit_name]
-                    unit_count[tempest_id] += 1
+                    cur_units[tempest_id].add(u.tag)
 
                 elif u.alliance == 4:
                     unit_name = UNIT_ID_TO_NAME[u.unit_type]
                     tempest_id = TEMPEST_UNITS[unit_name]
-                    obs_count[tempest_id] += 1
+                    cur_obs[tempest_id].add(u.tag)
 
             # https://github.com/deepmind/pysc2/blob/master/docs/environment.md#general-player-information
             res = obs.observation.player_common
-            resource_data.append((
-                current_timestep, res.minerals, res.vespene, res.food_cap, res.food_used, res.food_army,
-                res.food_workers, res.idle_worker_count, res.army_count, res.warp_gate_count, res.larva_count))
+            cur_state = (
+                res.minerals, res.vespene, res.food_cap, res.food_used,
+                res.food_army, res.food_workers, res.idle_worker_count,
+                res.army_count, res.warp_gate_count, res.larva_count
+            )
 
-            for ability_id in feat.available_actions(obs.observation):
-                self.stats.replay_stats.valid_actions[ability_id] += 1
+            # Collect unit observations over the course of 25 timesteps,
+            # which is about 10 seconds of real in-game time.
+            if current_timestep % 28 == 0 or obs.player_result:
+                unit_count = [0 for _ in range(200)]
+                obs_count = [0 for _ in range(200)]
 
-            if obs.player_result:
-                break
+                for unit_id, unit_tags in cur_units.items():
+                    unit_count[unit_id] = len(unit_tags)
 
+                for unit_id, unit_tags in cur_obs.items():
+                    obs_count[unit_id] = len(unit_tags)
+
+                unit_data.append(unit_count)
+                obs_data.append(obs_count)
+                state_data.append(cur_state)
+
+                cur_units = defaultdict(set)
+                cur_obs = defaultdict(set)
+
+                if obs.player_result:
+                    break
+
+            current_timestep += 1
             self._update_stage("step")
             controller.step(FLAGS.step_mul)
 
-            unit_data.append(unit_count)
-            obs_data.append(obs_count)
-
-            current_timestep += 1
+        self._print("Total observations: {}".format(len(unit_data)))
 
         np_units = np.array(unit_data)
         fname = output_dir + '/player_{}_units.npy'.format(player_id)
         np.save(fname, np_units)
-        self._print("Wrote player {} unit data to {}.".format(player_id, fname))
 
-        np_opp_units = np.array(obs_data)
+        np_obs = np.array(obs_data)
         fname = output_dir + '/player_{}_observed.npy'.format(player_id)
-        np.save(fname, np_opp_units)
-        self._print("Wrote player {}'s observed data to {}.".format(player_id, fname))
+        np.save(fname, np_obs)
 
-        np_resources = np.array(resource_data)
+        np_state = np.array(state_data)
         fname = output_dir + '/player_{}_resources.npy'.format(player_id)
-        np.save(fname, np_resources)
-        self._print("Wrote player {} resource data to {}.".format(player_id, fname))
+        np.save(fname, np_state)
+
+        self._print("Wrote player {} data to {}.".format(player_id, output_dir))
 
 
 def stats_printer(stats_queue):
