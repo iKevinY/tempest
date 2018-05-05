@@ -146,6 +146,9 @@ class TempestReplayProcessor(ReplayProcessor):
                             else:
                                 self._print("Replay is invalid.")
                                 self.stats.replay_stats.invalid_replays.add(replay_name)
+                        except:
+                            self._print("Unknown exception during replay {}".format(replay_name))
+                            self.stats.replay_stats.invalid_replays.add(replay_name)
                         finally:
                             self.replay_queue.task_done()
                     self._update_stage("shutdown")
