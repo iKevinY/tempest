@@ -15,6 +15,7 @@ import threading
 import time
 import logging
 import json
+import traceback
 from collections import defaultdict
 
 import numpy as np
@@ -147,7 +148,8 @@ class TempestReplayProcessor(ReplayProcessor):
                                 self._print("Replay is invalid.")
                                 self.stats.replay_stats.invalid_replays.add(replay_name)
                         except:
-                            self._print("Unknown exception during replay {}".format(replay_name))
+                            self._print("Unknown exception during replay {}:".format(replay_name))
+                            self._print(traceback.format_exc())
                             self.stats.replay_stats.invalid_replays.add(replay_name)
                         finally:
                             self.replay_queue.task_done()
