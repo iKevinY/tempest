@@ -197,14 +197,20 @@ class TempestReplayProcessor(ReplayProcessor):
                 # Alliance::Neutral == 3
                 # Alliance::Enemy == 4
                 if u.alliance == 1:
-                    unit_name = UNIT_ID_TO_NAME[u.unit_type]
-                    tempest_id = TEMPEST_UNITS[unit_name]
-                    cur_units[tempest_id].add(u.tag)
+                    try:
+                        unit_name = UNIT_ID_TO_NAME[u.unit_type]
+                        tempest_id = TEMPEST_UNITS[unit_name]
+                        cur_units[tempest_id].add(u.tag)
+                    except KeyError:
+                        pass
 
                 elif u.alliance == 4:
-                    unit_name = UNIT_ID_TO_NAME[u.unit_type]
-                    tempest_id = TEMPEST_UNITS[unit_name]
-                    cur_obs[tempest_id].add(u.tag)
+                    try:
+                        unit_name = UNIT_ID_TO_NAME[u.unit_type]
+                        tempest_id = TEMPEST_UNITS[unit_name]
+                        cur_obs[tempest_id].add(u.tag)
+                    except KeyError:
+                        pass
 
             # https://github.com/deepmind/pysc2/blob/master/docs/environment.md#general-player-information
             res = obs.observation.player_common
