@@ -1,5 +1,8 @@
 import os
 import sys
+import json
+
+import numpy as np
 
 
 # All properly parsed replays should have these files present
@@ -14,18 +17,29 @@ EXPECTED_FILES = [
 ]
 
 
-def has_complete_data(path):
-    replay_files = set()
+def load_parsed_replay(path):
+    expected = set(EXPECTED_FILES)
+    replay_data = {}
+
     with os.scandir(path) as it:
         for entry in it:
-            if not entry.name.startswith('.') and entry.is_file():
-                replay_files.add(entry.name)
+            if entry.is_file() and entry.name in expected:
+                fname = os.path.join(path, entry.name)
+                if entry.name.endswith('.npy'):
+                    data = np.load(fname)
+                elif entry.name.endswith('.json'):
+                    with open(fname) as f:
+                        data = json.load(f)
+                else:
+                    return None
 
-    for fname in EXPECTED_FILES:
-        if fname not in replay_files:
-            return False
+                replay_data[entry.name.split('.')[0]] = data
+                expected.remove(entry.name)
 
-    return True
+    if expected:
+        return None
+    else:
+        return replay_data
 
 
 
@@ -38,7 +52,8 @@ if __name__ == '__main__':
     with os.scandir(data_path) as it:
         for entry in it:
             if not entry.name.startswith('.') and entry.is_dir():
-                if has_complete_data(entry):
+                data = load_parsed_replay(entry)
+                if data is not None:
                     good_replays.add(entry.name)
                 else:
                     bad_replays.add(entry.name)
