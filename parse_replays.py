@@ -21,7 +21,6 @@ from collections import defaultdict
 import numpy as np
 
 from six.moves import queue
-from future.builtins import range  # pylint: disable=redefined-builtin
 
 from pysc2 import run_configs
 from pysc2.lib import features
@@ -63,31 +62,28 @@ RESULT = {
 class TempestReplayProcessor(ReplayProcessor):
     def run(self):
         signal.signal(signal.SIGTERM, lambda a, b: sys.exit())  # Exit quietly.
-        self._update_stage("spawn")
         replay_name = "none"
         while True:
-            self._print("Starting up a new SC2 instance.")
-            self._update_stage("launch")
+            # self._print("Starting up a new SC2 instance.")
+
             try:
                 with self.run_config.start() as controller:
-                    self._print("SC2 Started successfully.")
+                    # self._print("SC2 Started successfully.")
                     ping = controller.ping()
                     for _ in range(300):
                         try:
                             replay_path = self.replay_queue.get()
                         except queue.Empty:
-                            self._update_stage("done")
                             self._print("Empty queue, returning")
                             return
                         try:
                             replay_name = os.path.basename(replay_path)[:10]
                             self.stats.replay = replay_name
-                            self._print("Got replay: %s" % replay_path)
-                            self._update_stage("open replay file")
+                            # self._print("Got replay: %s" % replay_path)
                             replay_data = self.run_config.replay_data(replay_path)
-                            self._update_stage("replay_info")
                             info = controller.replay_info(replay_data)
-                            self._print("Processing Replay %s " % replay_name)
+                            self.stats.replay_stats.replays += 1
+
                             if valid_replay(info, ping):
                                 self.stats.replay_stats.maps[info.map_name] += 1
                                 for player_info in info.player_info:
@@ -96,7 +92,6 @@ class TempestReplayProcessor(ReplayProcessor):
                                     self.stats.replay_stats.races[race_name] += 1
                                 map_data = None
                                 if info.local_map_path:
-                                    self._update_stage("open map file")
                                     map_data = self.run_config.map_data(info.local_map_path)
 
                                 # Make directory to store output data
@@ -131,29 +126,36 @@ class TempestReplayProcessor(ReplayProcessor):
                                 metadata['game_apm'] = total_apm // len(races)
                                 metadata['game_mmr'] = total_mmr // len(races)
 
-                                self._print("Matchup: {} @ {}".format(metadata['matchup'], metadata['map_name']))
-                                self._print("Average MMR: {}".format(metadata['game_mmr']))
-                                self._print("Game length: {}s".format(int(metadata['game_duration_seconds'])))
+                                rs = self.stats.replay_stats
+                                total_replays = rs.replays
+                                good_replays = total_replays - len(rs.invalid_replays) - len(rs.crashing_replays)
+
+                                self._print("({}/{}) Processing replay {} ({} @ {} | MMR: {} | Length: {} s)".format(
+                                    good_replays, total_replays,
+                                    replay_name, metadata['matchup'], metadata['map_name'],
+                                    metadata['game_mmr'], int(metadata['game_duration_seconds'])))
 
                                 metadata_name = output_dir + '/metadata.json'
                                 with open(metadata_name, 'w') as f:
                                     f.write(json.dumps(metadata, indent=4, sort_keys=True) + '\n')
-                                    self._print("Wrote metadata to %s" % metadata_name)
 
                                 for player_id in [1, 2]:
-                                    self._print("Starting %s from player %s's perspective" % (
-                                        replay_name, player_id))
+                                    # self._print(" - Starting %s from player %s's perspective" % (
+                                        # replay_name, player_id))
                                     self.process_replay(controller, replay_data, map_data, player_id, output_dir, replay_name)
+
+                                # self._print(" - Finished processing replay {}".format(replay_name))
+
                             else:
-                                self._print("Replay is invalid.")
+                                # self._print("Replay is invalid.")
                                 self.stats.replay_stats.invalid_replays.add(replay_name)
                         except:
-                            self._print("Unknown exception during replay {}:".format(replay_name))
+                            self._print("Found exception during replay {}:".format(replay_name))
                             self._print(traceback.format_exc())
                             self.stats.replay_stats.invalid_replays.add(replay_name)
                         finally:
                             self.replay_queue.task_done()
-                    self._update_stage("shutdown")
+
             except (protocol.ConnectionError, protocol.ProtocolError, remote_controller.RequestError):
                 self.stats.replay_stats.crashing_replays.add(replay_name)
             except KeyboardInterrupt:
@@ -161,19 +163,13 @@ class TempestReplayProcessor(ReplayProcessor):
 
     def process_replay(self, controller, replay_data, map_data, player_id, output_dir, replay_name):
         """Process a single replay, updating the stats."""
-        self._update_stage("start_replay")
         controller.start_replay(sc_pb.RequestStartReplay(
             replay_data=replay_data,
             map_data=map_data,
             options=interface,
             observed_player_id=player_id))
 
-        # feat = features.Features(controller.game_info())
-
-        self.stats.replay_stats.replays += 1
-        self._update_stage("step")
         controller.step()
-
         current_timestep = 1
 
         unit_data = []
@@ -184,31 +180,15 @@ class TempestReplayProcessor(ReplayProcessor):
         cur_obs = defaultdict(set)
 
         while True:
-            self.stats.replay_stats.steps += 1
-            self._update_stage("observe")
             obs = controller.observe()
 
             for u in obs.observation.raw_data.units:
-                self.stats.replay_stats.unit_ids[u.unit_type] += 1
-
                 # https://github.com/Blizzard/s2client-api/blob/master/include/sc2api/sc2_unit.h#L83
-                # Alliance::Self == 1
-                # Alliance::Ally == 2
-                # Alliance::Neutral == 3
-                # Alliance::Enemy == 4
-                if u.alliance == 1:
+                if u.alliance == 1 or u.alliance == 4:  # Alliance::Self/Enemy
                     try:
                         unit_name = UNIT_ID_TO_NAME[u.unit_type]
                         tempest_id = TEMPEST_UNITS[unit_name]
-                        cur_units[tempest_id].add(u.tag)
-                    except KeyError:
-                        pass
-
-                elif u.alliance == 4:
-                    try:
-                        unit_name = UNIT_ID_TO_NAME[u.unit_type]
-                        tempest_id = TEMPEST_UNITS[unit_name]
-                        cur_obs[tempest_id].add(u.tag)
+                        (cur_units if u.alliance == 1 else cur_obs)[tempest_id].add(u.tag)
                     except KeyError:
                         pass
 
@@ -243,49 +223,17 @@ class TempestReplayProcessor(ReplayProcessor):
                     break
 
             current_timestep += 1
-            self._update_stage("step")
             controller.step(FLAGS.step_mul)
 
-        self._print("Total observations: {}".format(len(unit_data)))
+        data_to_save = [
+            (unit_data, 'units'),
+            (obs_data, 'observed'),
+            (state_data, 'resources'),
+        ]
 
-        np_units = np.array(unit_data)
-        fname = output_dir + '/player_{}_units.npy'.format(player_id)
-        np.save(fname, np_units)
-
-        np_obs = np.array(obs_data)
-        fname = output_dir + '/player_{}_observed.npy'.format(player_id)
-        np.save(fname, np_obs)
-
-        np_state = np.array(state_data)
-        fname = output_dir + '/player_{}_resources.npy'.format(player_id)
-        np.save(fname, np_state)
-
-        self._print("Wrote player {} data to {}.".format(player_id, output_dir))
-
-
-def stats_printer(stats_queue):
-    """A thread that consumes stats_queue and prints them every 10 seconds."""
-    proc_stats = [ProcessStats(i) for i in range(FLAGS.parallel)]
-    print_time = time.time()
-    width = 107
-
-    running = True
-    while running:
-        print_time += 10
-
-        while time.time() < print_time:
-            try:
-                s = stats_queue.get(True, print_time - time.time())
-                if s is None:  # Signal to print and exit NOW!
-                    running = False
-                    break
-                proc_stats[s.proc_id] = s
-            except queue.Empty:
-                pass
-
-        print(" Process stats ".center(width, "-"))
-        print("\n".join(str(s) for s in proc_stats))
-        print("=" * width)
+        for arr, suffix in data_to_save:
+            fname = output_dir + '/player_{}_{}.npy'.format(player_id, suffix)
+            np.save(fname, np.array(arr))
 
 
 def main(unused_argv):
@@ -296,8 +244,6 @@ def main(unused_argv):
         sys.exit("{} doesn't exist.".format(FLAGS.replays))
 
     stats_queue = multiprocessing.Queue()
-    stats_thread = threading.Thread(target=stats_printer, args=(stats_queue,))
-    stats_thread.start()
     try:
         # For some reason buffering everything into a JoinableQueue makes the
         # program not exit, so save it into a list then slowly fill it into the
@@ -322,9 +268,6 @@ def main(unused_argv):
         replay_queue.join()  # Wait for the queue to empty.
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt, exiting.")
-    finally:
-        stats_queue.put(None)  # Tell the stats_thread to print and exit.
-        stats_thread.join()
 
 
 if __name__ == '__main__':
