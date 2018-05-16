@@ -85,67 +85,7 @@ class TempestReplayProcessor(ReplayProcessor):
                             self.stats.replay_stats.replays += 1
 
                             if valid_replay(info, ping):
-                                self.stats.replay_stats.maps[info.map_name] += 1
-                                for player_info in info.player_info:
-                                    race_name = sc_common.Race.Name(
-                                        player_info.player_info.race_actual)
-                                    self.stats.replay_stats.races[race_name] += 1
-                                map_data = None
-                                if info.local_map_path:
-                                    map_data = self.run_config.map_data(info.local_map_path)
-
-                                # Make directory to store output data
-                                output_dir = "processed/{}".format(replay_name)
-                                if not os.path.exists(output_dir):
-                                    os.makedirs(output_dir)
-
-                                metadata = {}
-                                metadata['map_name'] = info.map_name
-                                metadata['game_duration_loops'] = info.game_duration_loops
-                                metadata['game_duration_seconds'] = info.game_duration_seconds
-                                metadata['game_version'] = info.game_version
-                                metadata['data_version'] = info.data_version
-                                metadata['players'] = {}
-                                races = []
-                                total_apm = 0
-                                total_mmr = 0
-
-                                for p in info.player_info:
-                                    player = {}
-                                    race = sc_common.Race.Name(p.player_info.race_actual)
-                                    races.append(race[0])
-                                    player['race'] = race
-                                    player['result'] = RESULT[p.player_result.result]
-                                    player['apm'] = p.player_apm
-                                    total_apm += p.player_apm
-                                    player['mmr'] = p.player_mmr
-                                    total_mmr += p.player_mmr
-                                    metadata['players'][p.player_info.player_id] = player
-
-                                metadata['matchup'] = '{}v{}'.format(min(races), max(races))
-                                metadata['game_apm'] = total_apm // len(races)
-                                metadata['game_mmr'] = total_mmr // len(races)
-
-                                rs = self.stats.replay_stats
-                                total_replays = rs.replays
-                                good_replays = total_replays - len(rs.invalid_replays) - len(rs.crashing_replays)
-
-                                self._print("({}/{}) Processing replay {} ({} @ {} | MMR: {} | Length: {} s)".format(
-                                    good_replays, total_replays,
-                                    replay_name, metadata['matchup'], metadata['map_name'],
-                                    metadata['game_mmr'], int(metadata['game_duration_seconds'])))
-
-                                metadata_name = output_dir + '/metadata.json'
-                                with open(metadata_name, 'w') as f:
-                                    f.write(json.dumps(metadata, indent=4, sort_keys=True) + '\n')
-
-                                for player_id in [1, 2]:
-                                    # self._print(" - Starting %s from player %s's perspective" % (
-                                        # replay_name, player_id))
-                                    self.process_replay(controller, replay_data, map_data, player_id, output_dir, replay_name)
-
-                                # self._print(" - Finished processing replay {}".format(replay_name))
-
+                                self.parse_replay(controller, replay_data, replay_name, info)
                             else:
                                 # self._print("Replay is invalid.")
                                 self.stats.replay_stats.invalid_replays.add(replay_name)
@@ -160,6 +100,66 @@ class TempestReplayProcessor(ReplayProcessor):
                 self.stats.replay_stats.crashing_replays.add(replay_name)
             except KeyboardInterrupt:
                 return
+
+
+    def parse_replay(self, controller, replay_data, replay_name, info):
+        """Grab metadata from replay and process both players' perspectives"""
+        map_data = None
+        if info.local_map_path:
+            map_data = self.run_config.map_data(info.local_map_path)
+
+        # Make directory to store output data
+        output_dir = "processed/{}".format(replay_name)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        metadata = {}
+        metadata['map_name'] = info.map_name
+        metadata['game_duration_loops'] = info.game_duration_loops
+        metadata['game_duration_seconds'] = info.game_duration_seconds
+        metadata['game_version'] = info.game_version
+        metadata['data_version'] = info.data_version
+        metadata['players'] = {}
+        races = []
+        total_apm = 0
+        total_mmr = 0
+
+        for p in info.player_info:
+            player = {}
+            race = sc_common.Race.Name(p.player_info.race_actual)
+            races.append(race[0])
+            player['race'] = race
+            player['result'] = RESULT[p.player_result.result]
+            player['apm'] = p.player_apm
+            total_apm += p.player_apm
+            player['mmr'] = p.player_mmr
+            total_mmr += p.player_mmr
+            metadata['players'][p.player_info.player_id] = player
+
+        metadata['matchup'] = '{}v{}'.format(min(races), max(races))
+        metadata['game_apm'] = total_apm // len(races)
+        metadata['game_mmr'] = total_mmr // len(races)
+
+        rs = self.stats.replay_stats
+        total_replays = rs.replays
+        good_replays = total_replays - len(rs.invalid_replays) - len(rs.crashing_replays)
+
+        self._print("({}/{}) Processing replay {} ({} @ {} | MMR: {} | Length: {} s)".format(
+            good_replays, total_replays,
+            replay_name, metadata['matchup'], metadata['map_name'],
+            metadata['game_mmr'], int(metadata['game_duration_seconds'])))
+
+        metadata_name = output_dir + '/metadata.json'
+        with open(metadata_name, 'w') as f:
+            f.write(json.dumps(metadata, indent=4, sort_keys=True) + '\n')
+
+        for player_id in [1, 2]:
+            # self._print(" - Starting %s from player %s's perspective" % (
+                # replay_name, player_id))
+            self.process_replay(controller, replay_data, map_data, player_id, output_dir, replay_name)
+
+        # self._print(" - Finished processing replay {}".format(replay_name))
+
 
     def process_replay(self, controller, replay_data, map_data, player_id, output_dir, replay_name):
         """Process a single replay, updating the stats."""
