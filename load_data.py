@@ -1,8 +1,10 @@
 import os
 import sys
 import json
+from collections import defaultdict
 
 import numpy as np
+from tqdm import tqdm
 
 
 # All properly parsed replays should have these files present
@@ -46,16 +48,28 @@ def load_parsed_replay(path):
 if __name__ == '__main__':
     data_path = sys.argv[1] if len(sys.argv) > 1 else '.'
 
-    good_replays = set()
-    bad_replays = set()
+    print("Scanning through data directory for potential replays...")
+    to_parse = []
 
     with os.scandir(data_path) as it:
         for entry in it:
             if not entry.name.startswith('.') and entry.is_dir():
-                data = load_parsed_replay(entry)
-                if data is not None:
-                    good_replays.add(entry.name)
-                else:
-                    bad_replays.add(entry.name)
+                to_parse.append(entry)
 
-    print("Found {}/{} good replays.".format(len(good_replays), len(good_replays) + len(bad_replays)))
+    print("Found {} potential replays.".format(len(to_parse)))
+    good_replays = defaultdict(set)
+    bad_replays = set()
+
+    for entry in tqdm(to_parse):
+        data = load_parsed_replay(entry)
+        if data is not None:
+            matchup = data['metadata']['matchup']
+            good_replays[matchup].add(entry.name)
+        else:
+            bad_replays.add(entry.name)
+
+    num_good = sum(len(v) for k, v in good_replays.items())
+    print("Found {}/{} good replays.".format(num_good, num_good + len(bad_replays)))
+    print("Matchup breakdown:")
+    for k, v in good_replays.items():
+        print("{}: {}".format(k, len(v)))
