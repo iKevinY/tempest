@@ -44,6 +44,16 @@ def load_parsed_replay(path):
         return replay_data
 
 
+def format_replay_data(data):
+    """
+    Returns X and Y for the given replay dictionary, where each
+    matrix has 2n rows for a replay with n parsed timesteps.
+
+    X_i: concatenation of state, unit, and observed enemy unit data
+    Y_i: TBD (potentially enemy unit count)
+    """
+    pass
+
 
 if __name__ == '__main__':
     data_path = sys.argv[1] if len(sys.argv) > 1 else '.'
