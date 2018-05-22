@@ -7,6 +7,30 @@ import numpy as np
 from tqdm import tqdm
 
 
+class ReplayData:
+    def __init__(self, data):
+        self.metadata = data['metadata']
+        self.timesteps = len(data['player_1_units'])
+        self.p1 = PlayerData(
+            data['player_1_units'],
+            data['player_1_observed'],
+            data['player_1_resources'],
+        )
+
+        self.p2 = PlayerData(
+            data['player_2_units'],
+            data['player_2_observed'],
+            data['player_2_resources'],
+        )
+
+
+class PlayerData:
+    def __init__(self, units, observed, resources):
+        self.units = units
+        self.observed = observed
+        self.resources = resources
+
+
 # All properly parsed replays should have these files present
 EXPECTED_FILES = [
     'metadata.json',
@@ -47,12 +71,31 @@ def load_parsed_replay(path):
 def format_replay_data(data):
     """
     Returns X and Y for the given replay dictionary, where each
-    matrix has 2n rows for a replay with n parsed timesteps.
+    matrix has 2(n - 1) rows for a replay with n parsed timesteps.
 
     X_i: concatenation of state, unit, and observed enemy unit data
-    Y_i: TBD (potentially enemy unit count)
+    Y_i: ground truth of enemy unit count (from enemy perspective)
     """
-    pass
+    replay = ReplayData(data)
+
+    X = []
+    Y = []
+
+    # Predict one timestep into the future, so n-1 total rows.
+    for i in range(replay.timesteps - 1):
+        for p1, p2 in ((replay.p1, replay.p2), (replay.p2, replay.p1)):
+            x_i = p1.resources[i]
+            x_i = np.append(x_i, p1.units[i])
+            x_i = np.append(x_i, p1.observed[i])
+            X.append(x_i)
+
+            Y.append(replay.p2.units[i + 1])
+
+    X = np.array(X)
+    Y = np.array(Y)
+
+    return X, Y
+
 
 
 if __name__ == '__main__':
@@ -74,6 +117,7 @@ if __name__ == '__main__':
         data = load_parsed_replay(entry)
         if data is not None:
             matchup = data['metadata']['matchup']
+            format_replay_data(data)
             good_replays[matchup].add(entry.name)
         else:
             bad_replays.add(entry.name)
