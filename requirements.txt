@@ -1,1 +1,3 @@
 PySC2==1.2
+tensorflow==1.8.0
+keras==2.1.6
