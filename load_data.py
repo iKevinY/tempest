@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 
 import numpy as np
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 
@@ -100,6 +101,8 @@ def format_replay_data(data):
 
 if __name__ == '__main__':
     data_path = sys.argv[1] if len(sys.argv) > 1 else '.'
+    max_replays = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    only_matchup = sys.argv[3] if len(sys.argv) > 3 else None
 
     print("Scanning through data directory for potential replays...")
     to_parse = []
@@ -113,14 +116,42 @@ if __name__ == '__main__':
     good_replays = defaultdict(set)
     bad_replays = set()
 
+    if max_replays is not None and max_replays > 0:
+        print("Taking the first {} replays...".format(max_replays))
+        to_parse = to_parse[:max_replays]
+
+    Xs = []
+    Ys = []
+
     for entry in tqdm(to_parse):
         data = load_parsed_replay(entry)
         if data is not None:
             matchup = data['metadata']['matchup']
-            format_replay_data(data)
+
+            if only_matchup is not None and matchup != only_matchup:
+                continue
+
             good_replays[matchup].add(entry.name)
+
+            x, y = format_replay_data(data)
+            if x.size != 0 and y.size != 0:
+                Xs.append(x)
+                Ys.append(y)
         else:
             bad_replays.add(entry.name)
+
+    X = np.vstack(Xs)
+    Y = np.vstack(Ys)
+
+    # print("X.shape:", X.shape)
+    # print("Y.shape:", Y.shape)
+
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2)
+
+    print("X_train.shape:", X_train.shape)
+    print("X_test.shape: ", X_test.shape)
+    print("Y_train.shape:", Y_train.shape)
+    print("Y_test.shape: ", Y_test.shape)
 
     num_good = sum(len(v) for k, v in good_replays.items())
     print("Found {}/{} good replays.".format(num_good, num_good + len(bad_replays)))
