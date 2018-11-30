@@ -69,7 +69,7 @@ def load_parsed_replay(path):
         return replay_data
 
 
-def format_replay_data(data):
+def format_observation_data(data):
     """
     Returns X and Y for the given replay dictionary, where each
     matrix has 2(n - 1) rows for a replay with n parsed timesteps.
@@ -97,6 +97,34 @@ def format_replay_data(data):
 
     return X, Y
 
+
+def format_prediction_data(data):
+    """
+    Returns X and Y for the given replay dictionary, where each
+    matrix has 2n rows for a replay with n parsed timesteps.
+
+    X_i: concatenation of (timestep, P1, P2) unit data at the current timestep
+    Y_i: 1 if P1 won, else P2
+    """
+    replay = ReplayData(data)
+    p1_won = replay.metadata['players'][1]['result'] == 'Win'
+
+    X = []
+    Y = []
+
+    for i in range(replay.timesteps):
+        for p1, p2 in ((replay.p1, replay.p2), (replay.p2, replay.p1)):
+            x_i = np.array([i])
+            x_i = np.append(x_i, p1.units[i])
+            x_i = np.append(x_i, p2.units[i])
+            X.append(x_i)
+
+            Y.append(1 if (p1_won and p1 is replay.p1) else 0)
+
+    X = np.array(X)
+    Y = np.array(Y)
+
+    return X, Y
 
 
 if __name__ == '__main__':
@@ -133,7 +161,8 @@ if __name__ == '__main__':
 
             good_replays[matchup].add(entry.name)
 
-            x, y = format_replay_data(data)
+            # x, y = format_observation_data(data)
+            x, y = format_prediction_data(data)
             if x.size != 0 and y.size != 0:
                 Xs.append(x)
                 Ys.append(y)
