@@ -107,7 +107,7 @@ def format_prediction_data(data):
     Y_i: 1 if P1 won, else P2
     """
     replay = ReplayData(data)
-    p1_won = replay.metadata['players'][1]['result'] == 'Win'
+    p1_won = replay.metadata['players']['1']['result'] == 'Win'
 
     X = []
     Y = []
@@ -170,7 +170,7 @@ if __name__ == '__main__':
             bad_replays.add(entry.name)
 
     X = np.vstack(Xs)
-    Y = np.vstack(Ys)
+    Y = np.hstack(Ys)
 
     # print("X.shape:", X.shape)
     # print("Y.shape:", Y.shape)
