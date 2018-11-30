@@ -6,7 +6,8 @@ from collections import defaultdict
 import numpy as np
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-
+from keras.models import Sequential
+from keras.layers import Dense, Activation
 
 class ReplayData:
     def __init__(self, data):
@@ -187,3 +188,12 @@ if __name__ == '__main__':
     print("Matchup breakdown:")
     for k, v in good_replays.items():
         print("{}: {}".format(k, len(v)))
+
+    model = Sequential([
+        Dense(32, input_dim=X_train.shape[1]),
+        Activation('relu'),
+        Dense(1, activation='sigmoid')
+    ])
+
+    model.compile(optimizer='rmsprop', loss='binary_crossentropy', metrics=['accuracy'])
+    model.fit(X, Y, validation_split=0.2, epochs=20, batch_size=10)
