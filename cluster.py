@@ -90,7 +90,6 @@ if __name__ == '__main__':
             x, y = format_strategy_clustering_data(data)
             if x is not None and y is not None:
                 Xs.append(x)
-                print(x)
                 Ys.append(y)
             else:
                 bad_replays.add(entry.name)
@@ -105,3 +104,5 @@ if __name__ == '__main__':
 
     X = np.vstack(Xs)
     Y = np.hstack(Ys)
+
+    print(X)
