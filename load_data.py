@@ -9,6 +9,7 @@ from tqdm import tqdm
 from keras.models import Sequential
 from keras.layers import Dense, Activation
 
+
 class ReplayData:
     def __init__(self, data):
         self.metadata = data['metadata']
@@ -115,7 +116,7 @@ def format_prediction_data(data):
 
     for i in range(replay.timesteps):
         for p1, p2 in ((replay.p1, replay.p2), (replay.p2, replay.p1)):
-            x_i = np.array([i])
+            x_i = np.array([i])  # first entry of row is current timestep
             x_i = np.append(x_i, p1.units[i])
             x_i = np.append(x_i, p2.units[i])
             X.append(x_i)
@@ -126,6 +127,7 @@ def format_prediction_data(data):
     Y = np.array(Y)
 
     return X, Y
+
 
 
 if __name__ == '__main__':
