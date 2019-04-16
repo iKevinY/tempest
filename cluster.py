@@ -11,9 +11,9 @@ from mappings import RELEVANT_TEMPEST_IDS
 
 def format_strategy_clustering_data(data):
     """
-    Returns X and Y for the given replay dictionary, where each row X_i
-    are army + tech building at given timesteps (intended to represent
-    what strategy a player is playing).
+    Return the units belonging to the timestep right before the
+    first army/building decrease of >5 for either player (indicating
+    the strategy decided before an initial skirmish)
 
     Y_i is 1 if the player state represented in X_i won, else 0.
     """
@@ -23,18 +23,27 @@ def format_strategy_clustering_data(data):
     X = []
     Y = []
 
+    max_p1 = 0
+    max_p2 = 0
+
     for i in range(replay.timesteps):
-        for p1, p2 in ((replay.p1, replay.p2), (replay.p2, replay.p1)):
-            x_i = np.array([i])  # first column is timestep index
-            x_i = np.append(x_i, p1.units[RELEVANT_TEMPEST_IDS])
-            X.append(x_i)
+        curr_p1 = replay.p1.units[i, RELEVANT_TEMPEST_IDS]
+        curr_p2 = replay.p2.units[i, RELEVANT_TEMPEST_IDS]
 
-            Y.append(1 if (p1_won and p1 is replay.p1) else 0)
+        if curr_p1.sum() < (max_p1 - 5) or curr_p2.sum() < (max_p2 - 5):
+            X.append(curr_p1)
+            Y.append(int(p1_won))
 
-    X = np.array(X)
-    Y = np.array(Y)
+            X.append(curr_p2)
+            Y.append(int(not p1_won))
 
-    return X, Y
+            return np.array(X), np.array(Y)
+
+        else:
+            max_p1 = max(max_p1, curr_p1.sum())
+            max_p2 = max(max_p2, curr_p2.sum())
+
+    return None, None
 
 
 
@@ -73,9 +82,8 @@ if __name__ == '__main__':
             good_replays[matchup].add(entry.name)
 
             x, y = format_strategy_clustering_data(data)
-            if x.size != 0 and y.size != 0:
+            if x is not None and y is not None:
                 Xs.append(x)
-                print(x)
                 Ys.append(y)
         else:
             bad_replays.add(entry.name)
