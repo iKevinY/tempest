@@ -20,6 +20,12 @@ def format_strategy_clustering_data(data):
     replay = ReplayData(data)
     p1_won = replay.metadata['players']['1']['result'] == 'Win'
 
+    p1_apm = replay.metadata['players']['1']['apm']
+    p1_mmr = replay.metadata['players']['1']['mmr']
+
+    p2_apm = replay.metadata['players']['2']['apm']
+    p2_mmr = replay.metadata['players']['2']['mmr']
+
     X = []
     Y = []
 
@@ -31,10 +37,10 @@ def format_strategy_clustering_data(data):
         curr_p2 = replay.p2.units[i, RELEVANT_TEMPEST_IDS]
 
         if curr_p1.sum() < (max_p1 - 5) or curr_p2.sum() < (max_p2 - 5):
-            X.append(curr_p1)
+            X.append(np.concatenate(([p1_apm, p1_mmr], curr_p1)))
             Y.append(int(p1_won))
 
-            X.append(curr_p2)
+            X.append(np.concatenate(([p2_apm, p2_mmr], curr_p2)))
             Y.append(int(not p1_won))
 
             return np.array(X), np.array(Y)
@@ -84,7 +90,10 @@ if __name__ == '__main__':
             x, y = format_strategy_clustering_data(data)
             if x is not None and y is not None:
                 Xs.append(x)
+                print(x)
                 Ys.append(y)
+            else:
+                bad_replays.add(entry.name)
         else:
             bad_replays.add(entry.name)
 
