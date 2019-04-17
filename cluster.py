@@ -1,12 +1,13 @@
 import os
 import sys
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import numpy as np
 from tqdm import tqdm
+from sklearn.cluster import AffinityPropagation
 
 from load_data import ReplayData, load_parsed_replay
-from mappings import RELEVANT_TEMPEST_IDS
+from mappings import RELEVANT_TEMPEST, RELEVANT_TEMPEST_IDS, TECH_BUILDINGS
 
 
 def format_strategy_clustering_data(data):
@@ -33,21 +34,24 @@ def format_strategy_clustering_data(data):
     max_p2 = 0
 
     for i in range(replay.timesteps):
-        curr_p1 = replay.p1.units[i, RELEVANT_TEMPEST_IDS]
-        curr_p2 = replay.p2.units[i, RELEVANT_TEMPEST_IDS]
+        curr_p1 = replay.p1.units[i, RELEVANT_TEMPEST_IDS].sum()
+        curr_p2 = replay.p2.units[i, RELEVANT_TEMPEST_IDS].sum()
 
-        if curr_p1.sum() < (max_p1 - 5) or curr_p2.sum() < (max_p2 - 5):
-            X.append(np.concatenate(([p1_apm, p1_mmr], curr_p1)))
+        if curr_p1 < (max_p1 - 5) or curr_p2 < (max_p2 - 5):
+            last_p1 = replay.p1.units[i - 1, RELEVANT_TEMPEST_IDS]
+            last_p2 = replay.p2.units[i - 1, RELEVANT_TEMPEST_IDS]
+
+            X.append(np.concatenate(([p1_apm, p1_mmr], last_p1)))
             Y.append(int(p1_won))
 
-            X.append(np.concatenate(([p2_apm, p2_mmr], curr_p2)))
+            X.append(np.concatenate(([p2_apm, p2_mmr], last_p2)))
             Y.append(int(not p1_won))
 
             return np.array(X), np.array(Y)
 
         else:
-            max_p1 = max(max_p1, curr_p1.sum())
-            max_p2 = max(max_p2, curr_p2.sum())
+            max_p1 = max(max_p1, curr_p1)
+            max_p2 = max(max_p2, curr_p2)
 
     return None, None
 
@@ -105,4 +109,19 @@ if __name__ == '__main__':
     X = np.vstack(Xs)
     Y = np.hstack(Ys)
 
-    print(X)
+    data = X[:, 2:]
+
+    print("MMR distribution:", np.histogram(X[:, 1]))
+
+    print("Clustering:")
+
+    ap = AffinityPropagation(damping=0.7).fit(data)
+    print(ap)
+    print(ap.labels_)
+    print("Total clusters: {}".format(ap.labels_.shape))
+
+    for strat in data:
+        print(list(strat[:len(TECH_BUILDINGS)]), list(strat[len(TECH_BUILDINGS):]))
+
+    print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[:len(TECH_BUILDINGS)]])
+    print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[len(TECH_BUILDINGS):]])
