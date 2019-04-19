@@ -56,12 +56,29 @@ def format_strategy_clustering_data(data):
     return None, None
 
 
+def which_strategy(row):
+    """
+    The input is a row which maps the total amount of the following units:
 
-if __name__ == '__main__':
-    data_path = sys.argv[1] if len(sys.argv) > 1 else '.'
-    max_replays = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    only_matchup = sys.argv[3] if len(sys.argv) > 3 else None
+    Buildings:               Army:
+    0: CYBERNETICSCORE       10: ADEPT             20: OBSERVER
+    1: DARKSHRINE            11: ARCHON            21: ORACLE
+    2: FLEETBEACON           12: CARRIER           22: PHOENIX
+    3: FORGE                 13: COLOSSUS          23: SENTRY
+    4: PHOTONCANNON          14: DARKTEMPLAR       24: STALKER
+    5: ROBOTICSBAY           15: DISRUPTOR         25: TEMPEST
+    6: ROBOTICSFACILITY      16: HIGHTEMPLAR       26: WARPPRISM
+    7: STARGATE              17: IMMORTAL          27: ZEALOT
+    8: TEMPLARARCHIVE        18: MOTHERSHIP
+    9: TWILIGHTCOUNCIL       19: MOTHERSHIPCORE
 
+    We want to categorize these counts into various strategies.
+    """
+
+    return 0
+
+
+def main(data_path, max_replays, only_matchup):
     print("Scanning through data directory for potential replays...")
     to_parse = []
 
@@ -109,19 +126,29 @@ if __name__ == '__main__':
     X = np.vstack(Xs)
     Y = np.hstack(Ys)
 
-    data = X[:, 2:]
+    # data = X[:, 2:]
 
-    print("MMR distribution:", np.histogram(X[:, 1]))
+    # print("MMR distribution:", np.histogram(X[:, 1]))
 
-    print("Clustering:")
+    # print("Clustering:")
 
-    ap = AffinityPropagation(damping=0.7).fit(data)
-    print(ap)
-    print(ap.labels_)
-    print("Total clusters: {}".format(ap.labels_.shape))
+    # ap = AffinityPropagation(damping=0.7).fit(data)
+    # print(ap)
+    # print(ap.labels_)
+    # print("Total clusters: {}".format(ap.labels_.shape))
 
-    for strat in data:
-        print(list(strat[:len(TECH_BUILDINGS)]), list(strat[len(TECH_BUILDINGS):]))
+    # for strat in data:
+    #     print(list(strat[:len(TECH_BUILDINGS)]), list(strat[len(TECH_BUILDINGS):]))
 
-    print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[:len(TECH_BUILDINGS)]])
-    print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[len(TECH_BUILDINGS):]])
+    # print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[:len(TECH_BUILDINGS)]])
+    # print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[len(TECH_BUILDINGS):]])
+
+    return X, Y
+
+
+if __name__ == '__main__':
+    data_path = sys.argv[1] if len(sys.argv) > 1 else '.'
+    max_replays = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    only_matchup = sys.argv[3] if len(sys.argv) > 3 else None
+
+    main(data_path, max_replays, only_matchup)
