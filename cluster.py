@@ -10,6 +10,8 @@ from load_data import ReplayData, load_parsed_replay
 from mappings import RELEVANT_TEMPEST, RELEVANT_TEMPEST_IDS, TECH_BUILDINGS
 
 
+SUPPLY_VALS = np.array([0] * 10 + [2, 4, 6, 6, 2, 3, 2, 4, 8, 2, 1, 3, 2, 2, 2, 5, 2, 2])
+
 def format_strategy_clustering_data(data):
     """
     Return the units belonging to the timestep right before the
@@ -54,6 +56,13 @@ def format_strategy_clustering_data(data):
             max_p2 = max(max_p2, curr_p2)
 
     return None, None
+
+
+def supply_total(row):
+    """
+    Returns the unit count * supply value for each of the army units in a composition row.
+    """
+    return row * SUPPLY_VALS
 
 
 def which_strategy(row):
