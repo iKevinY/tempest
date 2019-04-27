@@ -39,6 +39,9 @@ def format_strategy_clustering_data(data):
     max_p1_army = np.argmax(replay.p1.resources[:, 4])
     max_p2_army = np.argmax(replay.p2.resources[:, 4])
 
+    if max_p1_army <= 4 or max_p2_army <= 4:
+        return None, None
+
     max_p1 = replay.p1.units[max_p1_army, RELEVANT_TEMPEST_IDS]
     max_p2 = replay.p2.units[max_p2_army, RELEVANT_TEMPEST_IDS]
 
@@ -127,23 +130,6 @@ def main(data_path, max_replays, only_matchup):
 
     X = np.vstack(Xs)
     Y = np.hstack(Ys)
-
-    # data = X[:, 2:]
-
-    # print("MMR distribution:", np.histogram(X[:, 1]))
-
-    # print("Clustering:")
-
-    # ap = AffinityPropagation(damping=0.7).fit(data)
-    # print(ap)
-    # print(ap.labels_)
-    # print("Total clusters: {}".format(ap.labels_.shape))
-
-    # for strat in data:
-    #     print(list(strat[:len(TECH_BUILDINGS)]), list(strat[len(TECH_BUILDINGS):]))
-
-    # print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[:len(TECH_BUILDINGS)]])
-    # print([s[len("PROTOSS_"):] for s in RELEVANT_TEMPEST[len(TECH_BUILDINGS):]])
 
     return X, Y
 
