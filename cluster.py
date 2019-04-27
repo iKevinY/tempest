@@ -35,27 +35,20 @@ def format_strategy_clustering_data(data):
     max_p1 = 0
     max_p2 = 0
 
-    for i in range(replay.timesteps):
-        curr_p1 = replay.p1.units[i, RELEVANT_TEMPEST_IDS].sum()
-        curr_p2 = replay.p2.units[i, RELEVANT_TEMPEST_IDS].sum()
+    # Index 4 is army supply under resources
+    max_p1_army = np.argmax(replay.p1.resources[:, 4])
+    max_p2_army = np.argmax(replay.p2.resources[:, 4])
 
-        if curr_p1 < (max_p1 - 5) or curr_p2 < (max_p2 - 5):
-            last_p1 = replay.p1.units[i - 1, RELEVANT_TEMPEST_IDS]
-            last_p2 = replay.p2.units[i - 1, RELEVANT_TEMPEST_IDS]
+    max_p1 = replay.p1.units[max_p1_army, RELEVANT_TEMPEST_IDS]
+    max_p2 = replay.p2.units[max_p2_army, RELEVANT_TEMPEST_IDS]
 
-            X.append(np.concatenate(([p1_apm, p1_mmr], last_p1)))
-            Y.append(int(p1_won))
+    X.append(np.concatenate(([p1_apm, p1_mmr], max_p1)))
+    Y.append(int(p1_won))
 
-            X.append(np.concatenate(([p2_apm, p2_mmr], last_p2)))
-            Y.append(int(not p1_won))
+    X.append(np.concatenate(([p2_apm, p2_mmr], max_p2)))
+    Y.append(int(not p1_won))
 
-            return np.array(X), np.array(Y)
-
-        else:
-            max_p1 = max(max_p1, curr_p1)
-            max_p2 = max(max_p2, curr_p2)
-
-    return None, None
+    return np.array(X), np.array(Y)
 
 
 def supply_total(row):
