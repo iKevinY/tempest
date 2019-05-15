@@ -4,10 +4,7 @@ import json
 from collections import defaultdict
 
 import numpy as np
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-from keras.models import Sequential
-from keras.layers import Dense, Activation
 
 
 class ReplayData:
@@ -129,13 +126,8 @@ def format_prediction_data(data):
     return X, Y
 
 
-
-if __name__ == '__main__':
-    data_path = sys.argv[1] if len(sys.argv) > 1 else '.'
-    max_replays = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    only_matchup = sys.argv[3] if len(sys.argv) > 3 else None
-
-    print("Scanning through data directory for potential replays...")
+def get_replays(data_path, max_replays, only_matchup, parser_fn):
+    # print("Scanning through data directory for potential replays...")
     to_parse = []
 
     with os.scandir(data_path) as it:
@@ -143,7 +135,7 @@ if __name__ == '__main__':
             if not entry.name.startswith('.') and entry.is_dir():
                 to_parse.append(entry)
 
-    print("Found {} potential replays.".format(len(to_parse)))
+    # print("Found {} potential replays.".format(len(to_parse)))
     good_replays = defaultdict(set)
     bad_replays = set()
 
@@ -164,38 +156,22 @@ if __name__ == '__main__':
 
             good_replays[matchup].add(entry.name)
 
-            # x, y = format_observation_data(data)
-            x, y = format_prediction_data(data)
-            if x.size != 0 and y.size != 0:
+            x, y = parser_fn(data)
+            if x is not None and y is not None:
                 Xs.append(x)
                 Ys.append(y)
+            else:
+                bad_replays.add(entry.name)
         else:
             bad_replays.add(entry.name)
+
+    num_good = sum(len(v) for k, v in good_replays.items())
+    # print("Found {}/{} good replays.".format(num_good, num_good + len(bad_replays)))
+    # print("Matchup breakdown:")
+    # for k, v in good_replays.items():
+    #     print("{}: {}".format(k, len(v)))
 
     X = np.vstack(Xs)
     Y = np.hstack(Ys)
 
-    # print("X.shape:", X.shape)
-    # print("Y.shape:", Y.shape)
-
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2)
-
-    print("X_train.shape:", X_train.shape)
-    print("X_test.shape: ", X_test.shape)
-    print("Y_train.shape:", Y_train.shape)
-    print("Y_test.shape: ", Y_test.shape)
-
-    num_good = sum(len(v) for k, v in good_replays.items())
-    print("Found {}/{} good replays.".format(num_good, num_good + len(bad_replays)))
-    print("Matchup breakdown:")
-    for k, v in good_replays.items():
-        print("{}: {}".format(k, len(v)))
-
-    model = Sequential([
-        Dense(32, input_dim=X_train.shape[1]),
-        Activation('relu'),
-        Dense(1, activation='sigmoid')
-    ])
-
-    model.compile(optimizer='rmsprop', loss='binary_crossentropy', metrics=['accuracy'])
-    model.fit(X, Y, validation_split=0.2, epochs=20, batch_size=10)
+    return X, Y
