@@ -1,6 +1,6 @@
 # tempest
 
-StarCraft II replay-processing pipeline.
+StarCraft II replay-processing pipeline (for my undergraduate research).
 
 
 ## Installation
